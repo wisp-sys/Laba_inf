@@ -1,0 +1,170 @@
+== Работа в IAR Embedded Workbench
+
+=== Задание:
+
+Целью работы было создание программы, способной управлять режимом работы светодиода.
+
+= *Ход работы:*
+
+Для успешного выполнения работы потребовалось нарисовать схему в *StarUML*:
+
+.StarUML
+image::Photo/file.png[]
+
+В данной структуре описываются необходимые классы и методы для нормальной работы программы. Классы и методы для
+кнопки расположены справа, а для светодиода - слева. В центре описан класс "Event", который будет сигнализировать нам о том, что
+произошло событие, и как следствие, будут выполняться определенные функции после данного события.
+
+
+Код программы:
+[source, cpp]
+----
+Led.hpp
+
+#pragma once
+#include "ILed.hpp"
+
+
+template<typename TPORT, int pinNum>
+class Led : public ILed
+{
+public:
+  void Toggle() override
+  {
+    TPORT::ODR::Toggle(1 << pinNum);
+  }
+};
+
+----
+
+
+[source, cpp]
+----
+ILed.hpp
+
+#pragma once
+
+
+class ILed
+{
+  public:
+    virtual void Toggle() = 0;
+};
+
+----
+
+
+[source, cpp]
+----
+LedTask.hpp
+
+#pragma once
+#include "ILed.hpp" //for Iled
+#include "thread.hpp" //for thread
+#include "event.hpp"
+
+using namespace OsWrapper;
+
+class LedTask : public Thread<128U>
+{
+public:
+    void Execute() override;
+    LedTask(ILed& Lled, std::chrono::milliseconds aPeriod, Event& ievent);
+private:
+  ILed& led;
+  Event& event;
+  std::chrono::milliseconds period;
+};
+----
+
+
+[source, cpp]
+----
+button.hpp
+
+#pragma once
+#include "Ibutton.hpp"
+
+template<typename TPORT, int pinNum>
+class Button : public IButton
+{
+public:
+  bool IsPressed() override
+  {
+    return !(TPORT::IDR::Get() & (1 << pinNum));
+  }
+
+};
+
+----
+
+
+[source, cpp]
+----
+Ibutton.hpp
+
+#pragma once
+
+class IButton
+{
+  public:
+    virtual bool IsPressed() = 0;
+};
+----
+
+
+
+[source, cpp]
+----
+ButtonTask.hpp
+
+#pragma once
+#include "Ibutton.hpp" //for Iled
+#include "thread.hpp" //for thread
+#include "event.hpp"
+
+using namespace OsWrapper;
+
+class ButtonTask : public Thread<128U>
+{
+public:
+  ButtonTask(IButton& aButton, Event& ievent);
+  void Execute() override;
+
+private:
+  IButton& button;
+  Event& event;
+
+};
+----
+
+
+
+[source, cpp]
+----
+ButtonTask.cpp
+
+#include "ButtonTask.hpp"
+
+ButtonTask::ButtonTask(IButton& aButton, Event& ievent) : button(aButton), event(ievent)
+{
+}
+void ButtonTask::Execute()
+{
+  for(;;)
+  {
+    if(button.IsPressed())
+    {
+      event.Signal();
+    }
+     Sleep(300ms) ;
+  }
+}
+----
+
+
+Работа программы показана ниже:
+
+image::https://github.com/wisp-sys/Laba_inf/blob/main/Photo/giv.gif[]
+
+
